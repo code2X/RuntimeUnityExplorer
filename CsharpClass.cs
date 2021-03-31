@@ -1,14 +1,8 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
-using System.Linq.Expressions;
 using System.Reflection;
 
 using HarmonyLib;
-using UnityEngine;
 
 namespace ExplorerSpace
 {
@@ -32,21 +26,24 @@ namespace ExplorerSpace
 
     public class CsharpClass
     {
-        private MethodInfo[] methodInfos;
-        private PropertyInfo[] propertyInfos;
-        private FieldInfo[] fieldInfos;
-        private EventInfo[] eventInfos;
+        MethodInfo[] methodInfos;
+        PropertyInfo[] propertyInfos;
+        FieldInfo[] fieldInfos;
+        EventInfo[] eventInfos;
 
-        private SortedList<string, FieldInfo> sortField;
-        private SortedList<string, PropertyInfo> sortProp;
-        public SortedList<string, MethodInfo> sortMethod;
-        public SortedList<string, MethodInfo> sortGetMethod;
-        public SortedList<string, MethodInfo> sortSetMethod;
+        SortedList<string, FieldInfo> sortField;
+        SortedList<string, PropertyInfo> sortProperty;
+        SortedList<string, MethodInfo> sortMethod;
+        SortedList<string, MethodInfo> sortGetMethod;
+        SortedList<string, MethodInfo> sortSetMethod;
 
-        private SortedList<string, FieldInfo> sortStaticField;
-        private SortedList<string, MethodInfo> sortStaticProp;
-        public SortedList<string, MethodInfo> sortStaticMethod;
+        SortedList<string, FieldInfo> sortStaticField;
+        SortedList<string, PropertyInfo> sortStaticProperty;
+        SortedList<string, MethodInfo> sortStaticMethod;
+        SortedList<string, MethodInfo> sortStaticGetMethod;
+        SortedList<string, MethodInfo> sortStaticSetMethod;
 
+        public string typeName = "";
         public Type type;
 
         public SortedList<string, FieldInfo> FieldList
@@ -60,7 +57,7 @@ namespace ExplorerSpace
         {
             get
             {
-                return sortProp;
+                return sortProperty;
             }
         }
         public SortedList<string, MethodInfo> MethodList
@@ -70,11 +67,39 @@ namespace ExplorerSpace
                 return sortMethod;
             }
         }
+        public SortedList<string, MethodInfo> GetMethodList
+        {
+            get
+            {
+                return sortGetMethod;
+            }
+        }
+        public SortedList<string, MethodInfo> SetMethodList
+        {
+            get
+            {
+                return sortSetMethod;
+            }
+        }
         public SortedList<string, FieldInfo> StaticFieldList
         {
             get
             {
                 return sortStaticField;
+            }
+        }
+        public SortedList<string, MethodInfo> StaticGetMethodList
+        {
+            get
+            {
+                return sortStaticGetMethod;
+            }
+        }
+        public SortedList<string, MethodInfo> StaticSetMethodList
+        {
+            get
+            {
+                return sortStaticSetMethod;
             }
         }
         public SortedList<string, MethodInfo> StaticMethodList
@@ -84,29 +109,32 @@ namespace ExplorerSpace
                 return sortStaticMethod;
             }
         }
-        public SortedList<string, MethodInfo> StaticPropList
+        public SortedList<string, PropertyInfo> StaticPropList
         {
             get
             {
-                return sortStaticProp;
+                return sortStaticProperty;
             }
         }
 
         public CsharpClass(Type classType)
         {
-            type = classType;
-
             try
             {
+                type = classType;
+                typeName = type.Name;
+
                 sortField = new SortedList<string, FieldInfo>();
-                sortProp = new SortedList<string, PropertyInfo>();
+                sortProperty = new SortedList<string, PropertyInfo>();
                 sortMethod = new SortedList<string, MethodInfo>();
                 sortGetMethod = new SortedList<string, MethodInfo>();
                 sortSetMethod = new SortedList<string, MethodInfo>();
 
                 sortStaticField = new SortedList<string, FieldInfo>();
+                sortStaticProperty = new SortedList<string, PropertyInfo>();
                 sortStaticMethod = new SortedList<string, MethodInfo>();
-                sortStaticProp = new SortedList<string, MethodInfo>();
+                sortStaticGetMethod = new SortedList<string, MethodInfo>();
+                sortStaticSetMethod = new SortedList<string, MethodInfo>();
 
                 methodInfos = classType.GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
                 propertyInfos = classType.GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
@@ -115,16 +143,16 @@ namespace ExplorerSpace
 
                 AddNameList();
             }
-            catch (Exception info)
+            catch (Exception exp)
             {
-                //Console.WriteLine(info.Message);
+                Logger.Error(exp);
             }
         }
 
         //Get a name new in sortlist
         private string GetName<T>(SortedList<string, T> sortList, string name)
         {
-            while (sortMethod.ContainsKey(name))
+            while (sortList.ContainsKey(name))
             {
                 name += "#";
             }
@@ -138,13 +166,18 @@ namespace ExplorerSpace
             {             
                 if(m.IsStatic)
                 {
-                    //Static Property Function
-                    if (m.Name.StartsWith("get_") || m.Name.StartsWith("set_"))
+                    //Property Function
+                    if (m.Name.StartsWith("get_"))
                     {
-                        string name = GetName(sortStaticProp, m.Name);
-                        sortStaticProp.Add(name, m);
+                        string name = GetName(sortStaticGetMethod, m.Name);
+                        sortStaticGetMethod.Add(name, m);
                     }
-                    //Static Function
+                    else if (m.Name.StartsWith("set_"))
+                    {
+                        string name = GetName(sortStaticSetMethod, m.Name);
+                        sortStaticSetMethod.Add(name, m);
+                    }
+                    //General Function
                     else
                     {
                         string name = GetName(sortStaticMethod, m.Name);
@@ -153,39 +186,40 @@ namespace ExplorerSpace
                 }
                 else
                 {
-                    string name = GetName(sortMethod, m.Name);
-
                     //Unity Function
-                    if (name.StartsWith("BroadcastMessage") ||
-                      name.StartsWith("CancelInvoke") ||
-                      name.StartsWith("GetComponent") ||
-                      name.StartsWith("SendMessage") ||
-                      name.StartsWith("StartCoroutine") ||
-                      name.StartsWith("StopAllCoroutine") ||
-                      name.StartsWith("StopCoroutine") ||
-                      name.StartsWith("Invoke") ||
-                      name.StartsWith("ToString") ||
-                      name.StartsWith("GetType") ||
-                      name.StartsWith("Get") ||
-                      name.StartsWith("IsInvok") ||
-                      name == "CompareTo" ||
-                      name == "Equals")
+                    if (m.Name.StartsWith("BroadcastMessage") ||
+                      m.Name.StartsWith("CancelInvoke") ||
+                      m.Name.StartsWith("GetComponent") ||
+                      m.Name.StartsWith("SendMessage") ||
+                      m.Name.StartsWith("StartCoroutine") ||
+                      m.Name.StartsWith("StopAllCoroutine") ||
+                      m.Name.StartsWith("StopCoroutine") ||
+                      m.Name.StartsWith("Invoke") ||
+                      m.Name.StartsWith("ToString") ||
+                      m.Name.StartsWith("GetType") ||
+                      m.Name.StartsWith("Get") ||
+                      m.Name.StartsWith("IsInvok") ||
+                      m.Name == "CompareTo" ||
+                      m.Name == "Equals")
                         continue;
 
                     //Property Function
-                    //if (name.StartsWith("get_"))
-                    //{
-                    //    sortGetMethod.Add(name, m);
-                    //}
-                    //else if (name.StartsWith("set_"))
-                    //{
-                    //    sortSetMethod.Add(name, m);
-                    //}
-                    ////General Function
-                    //else
-                    //{
+                    if (m.Name.StartsWith("get_"))
+                    {
+                        string name = GetName(sortGetMethod, m.Name);
+                        sortGetMethod.Add(name, m);
+                    }
+                    else if (m.Name.StartsWith("set_"))
+                    {
+                        string name = GetName(sortSetMethod, m.Name);
+                        sortSetMethod.Add(name, m);
+                    }
+                    //General Function
+                    else
+                    {
+                        string name = GetName(sortMethod, m.Name);
                         sortMethod.Add(name, m);
-                    //}
+                    }
                 }
           
             }
@@ -193,8 +227,17 @@ namespace ExplorerSpace
             //Property
             foreach (PropertyInfo m in propertyInfos)
             {
-                string name = GetName(sortProp, m.Name);
-                sortProp.Add(m.Name, m);
+                MethodInfo[] methodInfo = m.GetAccessors();
+                if(methodInfo.Length > 0 && methodInfo[0].IsStatic)
+                {
+                    string name = GetName(sortStaticProperty, m.Name);
+                    sortStaticProperty.Add(name, m);
+                }
+                else
+                {
+                    string name = GetName(sortProperty, m.Name);
+                    sortProperty.Add(name, m);
+                }
             }
 
             //Field
@@ -210,7 +253,7 @@ namespace ExplorerSpace
                 else
                 {
                     string name = GetName(sortField, m.Name);
-                    sortField.Add(m.Name, m);
+                    sortField.Add(name, m);
                 }
             }
 
@@ -234,7 +277,7 @@ namespace ExplorerSpace
 
         public static void Patch(ref MethodInfo patchInfo)
         {
-            Debug.Log("Patch:" + patchInfo.Name);
+            Console.WriteLine("Patch:" + patchInfo.Name);
             Reset();
           
             if (patched == true)
@@ -258,7 +301,7 @@ namespace ExplorerSpace
 
         public static void UnPatch(ref MethodInfo patchInfo)
         {
-            Debug.Log("UnPatch:" + patchInfo.Name);
+            Console.WriteLine("UnPatch:" + patchInfo.Name);
             Reset();
 
             try

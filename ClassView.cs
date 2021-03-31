@@ -1,449 +1,411 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-
 using UnityEngine;
-using UnityEngine.EventSystems;
-using UnityEngine.UI;
+using ImGuiNET;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Collections;
 
 namespace ExplorerSpace
 {
-    public abstract class IView
+
+    public abstract class IClassView
     {
-        public static float midx = 190;
+        public static ImGuiTableFlags TableFlags = ImGuiTableFlags.SizingFixedFit | ImGuiTableFlags.Borders | ImGuiTableFlags.Resizable | ImGuiTableFlags.Reorderable | ImGuiTableFlags.Hideable;
         public abstract ClassInfo GetInfo();
-        public abstract void DrawMidView(string className, CsharpClass csharpClass);
-        public virtual void DrawRightView(string className, CsharpClass csharpClass) { }
+        protected abstract void Draw();
+
+        public virtual void DrawView()
+        {
+            if (!show) return;
+            Draw();
+        }
+
+        public virtual void Show(Type type, object instance = null)
+        {
+            string classTypeName = type.Name;
+
+            if (UnityGameExplorer.classListDetails.ContainsKey(classTypeName) == false)
+            {
+                UnityGameExplorer.classListDetails.Add(type.Name, new CsharpClass(type));
+            }
+            curClass = UnityGameExplorer.classListDetails[classTypeName];
+            curInstance = instance;
+            show = true;
+        }
+
+        public virtual CsharpClass GetClass() => curClass;
+        public virtual object GetClassInstance() => curInstance;
+
+        protected bool show = false;
+        CsharpClass curClass;
+        object curInstance;
     }
 
-    class MethodView : IView
+    public class ClassView : IClassView
     {
-        Rect midArea = new Rect(IView.midx, 50, 340, 700);
-        Vector2 midPos = new Vector2();
-        Rect rightArea = new Rect(530, 50, 140, 700);
-        Vector2 rightPos = new Vector2();
+        List<IClassView> subViews;
+        Dictionary<Type, bool> topTabs;
 
-        string curHookFuncName = string.Empty;
+        static ClassView instance = new ClassView();
+        public static ClassView GetInstance() => instance;
+        public override ClassInfo GetInfo() => throw new NotImplementedException();
 
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
+        ClassView()
         {
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "函数");
+            subViews = new List<IClassView>();
+            topTabs = new Dictionary<Type, bool>();
+        }
 
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            foreach (var keyValue in curClass.MethodList)
+        public void AddSubView(IClassView classView)
+        {
+            subViews.Add(classView);
+        }
+
+        public void Show(Type type)
+        {
+            TryAddTopTab(type);
+            base.Show(type);
+            ShowSubViews(type);
+        }
+
+        protected override void Draw()
+        {
+            ImGui.Begin("Class Information", ref show);
+            DrawTopTab();
+            DrawSubViews();
+            ImGui.End();
+        }
+
+        void DrawTopTab()
+        {
+            //store tab state
+            var typesState = new Dictionary<Type, bool>();
+            if (ImGui.BeginTabBar("ClassInfoViewTopTab"))
             {
-                if (GUILayout.Button(keyValue.Key))
+                foreach (var type in topTabs)
                 {
-                    curHookFuncName = keyValue.Key;
-                    var methdInfo = curClass.MethodList[keyValue.Key];
-                    SinglePatch.Patch(ref methdInfo);
-                }
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public override void DrawRightView(string className, CsharpClass csharpClass)
-        {
-            if (curHookFuncName != String.Empty)
-                GUI.TextField(new Rect(430, 30, 190, 20), curHookFuncName);
-            GUILayout.BeginArea(rightArea);
-            rightPos = GUILayout.BeginScrollView(rightPos);
-            GUILayout.Label("调用次数: " + SinglePatch.count);
-            SinglePatch.block = GUILayout.Toggle(SinglePatch.block, "拦截");
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public override ClassInfo GetInfo()
-        {
-            return ClassInfo.Method;
-        }
-    }
-
-    class PropView : IView
-    {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-
-        ScrollView midScrollview = new ScrollView(190, 50, 240);
-        ScrollView rightScrollview = new ScrollView(430, 50, 200);
-
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
-        {
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "属性");
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            //Title
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Type");
-            GUILayout.Label("Name");
-            GUILayout.EndHorizontal();
-
-            //List
-            foreach (var i in curClass.PropList)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Button(i.Value.PropertyType.Name);
-                GUILayout.TextField(i.Key);
-                GUILayout.EndHorizontal();
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public override ClassInfo GetInfo()
-        {
-            return ClassInfo.Property;
-        }
-    }
-
-    class FieldView : IView
-    {
-        Rect midArea = new Rect(IView.midx, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-
-        ScrollView midScrollview = new ScrollView(190, 50, 240);
-        ScrollView rightScrollview = new ScrollView(430, 50, 200);
-
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
-        {
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "变量");
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-
-            //Title
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Type");
-            GUILayout.Label("Name");
-            GUILayout.EndHorizontal();
-
-            //List
-            foreach (var i in curClass.FieldList)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Button(i.Value.FieldType.Name);
-                GUILayout.TextField(i.Key);
-                GUILayout.EndHorizontal();
-            }
-
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public override ClassInfo GetInfo()
-        {
-            return ClassInfo.Field;
-        }
-    }
-
-    interface IInstanceView
-    {
-        ClassInfo GetInfo();
-        void DrawMidView(CsharpClass instanceClass, object instance);
-        void DrawRightView(CsharpClass instanceClass, object instance);
-    }
-
-    class InstanceFieldView : IInstanceView
-    {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-
-        public void DrawMidView(CsharpClass instanceClass, object instance)
-        {
-            GUI.TextField(new Rect(210, 30, 190, 20), instance.ToString());
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            GUILayout.BeginHorizontal();
-            GUILayout.TextField("Type");
-            GUILayout.TextField("Name");
-            GUILayout.TextField("Value");
-            GUILayout.EndHorizontal();
-
-            foreach (var i in instanceClass.FieldList)
-            {
-                if ((CsharpKeyword.GeneralTypes.Contains(i.Value.FieldType) || i.Value.FieldType.IsEnum) && instance != null)
-                {
-                    //Debug.Log("Instance");
-                    object obj = i.Value.GetValue(instance);
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Button(i.Value.FieldType.Name + "  " + i.Key);
-                    GUILayout.TextField(obj.ToString());
-                    GUILayout.EndHorizontal();
-                }
-                else
-                {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Button(i.Value.FieldType.Name + "  " + i.Key);
-                    GUILayout.EndHorizontal();
-                }
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public void DrawRightView(CsharpClass className, object csharpClass)
-        {
-
-        }
-
-        public ClassInfo GetInfo()
-        {
-            return ClassInfo.Field;
-        }
-    }
-
-    class InstanceMethodView : IInstanceView
-    {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-
-        public void DrawMidView(CsharpClass instanceClass, object instance)
-        {
-            GUI.TextField(new Rect(210, 30, 190, 20), instance.ToString());
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            GUILayout.BeginHorizontal();
-            GUILayout.TextField("ReturnType");
-            GUILayout.TextField("Name");
-            GUILayout.EndHorizontal();
-
-            foreach (var i in instanceClass.MethodList)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Button(i.Value.ReturnType.Name);
-                GUILayout.Button(i.Key);
-                GUILayout.EndHorizontal();
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public void DrawRightView(CsharpClass className, object csharpClass)
-        {
-
-        }
-
-        public ClassInfo GetInfo()
-        {
-            return ClassInfo.Method;
-        }
-    }
-
-    class InstancePropView : IInstanceView
-    {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-
-        public void DrawMidView(CsharpClass instanceClass, object instance)
-        {
-            GUI.TextField(new Rect(210, 30, 190, 20), instance.ToString());
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            GUILayout.BeginHorizontal();
-            GUILayout.TextField("Type");
-            GUILayout.TextField("Name");
-            GUILayout.EndHorizontal();
-
-            foreach (var i in instanceClass.PropList)
-            {
-                GUILayout.BeginHorizontal();
-                GUILayout.Button(i.Value.PropertyType.Name);
-                GUILayout.Button(i.Key);
-                GUILayout.EndHorizontal();
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-        }
-
-        public void DrawRightView(CsharpClass className, object csharpClass)
-        {
-
-        }
-
-        public ClassInfo GetInfo()
-        {
-            return ClassInfo.Property;
-        }
-    }
-
-    class StaticMethodView : IView
-    {
-        Rect midArea = new Rect(190, 50, 240, 700);
-        Vector2 midPos = new Vector2();
-
-        ScrollView midScrollview = new ScrollView(190, 50, 240);
-        ScrollView rightScrollview = new ScrollView(430, 50, 200);
-        static CsharpClass curClass;
-        static string curFuncName = string.Empty;
-
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
-        {
-            StaticMethodView.curClass = curClass;
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "静态函数");
-
-            //midScrollview.Begin();
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-            foreach (var i in curClass.StaticMethodList)
-            {
-                if (GUILayout.Button(i.Key))
-                {
-                    curFuncName = i.Key;
-                }
-            }
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
-            //midScrollview.End();
-        }
-
-        public override void DrawRightView(string className, CsharpClass csharpClass)
-        {
-            if (curFuncName != string.Empty)
-            {
-                var func = curClass.StaticMethodList[curFuncName];
-
-                if (curFuncName != String.Empty)
-                    GUI.TextField(new Rect(430, 30, 190, 20), curFuncName);
-
-                rightScrollview.Begin();
-                rightScrollview.Lable("返回类型: " + func.ReturnType.Name);
-                rightScrollview.End();
-            }
-        }
-
-        public override ClassInfo GetInfo() => ClassInfo.StaticMethod;
-    }
-
-    class StaticPropView : IView
-    {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
-        ScrollView rightScrollview = new ScrollView(430, 50, 200);
-        static CsharpClass curClass;
-        static string curFuncName = string.Empty;
-
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
-        {
-            StaticPropView.curClass = curClass;
-            curFuncName = string.Empty;
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "静态属性");
-
-            //midScrollview.Begin();
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-
-            //Title
-            GUILayout.BeginHorizontal();
-            GUILayout.Label("Static Property");
-            GUILayout.Label("Value");
-            GUILayout.EndHorizontal();
-
-            foreach (var i in curClass.StaticPropList)
-            {
-                var func = curClass.StaticPropList[i.Key];
-                if (CsharpKeyword.GeneralTypes.Contains(func.ReturnType) && i.Key.StartsWith("get_"))
-                {
-                    GUILayout.BeginHorizontal();
-                    if (GUILayout.Button(i.Value.ReturnType.Name + "  " + i.Key))
+                    bool opened = topTabs[type.Key];
+                    if (opened && ImGui.BeginTabItem(type.Key.Name, ref opened, ImGuiTabItemFlags.None))
                     {
-                        curFuncName = i.Key;
+                        Show(type.Key);
+                        ImGui.EndTabItem();
                     }
-                    GUILayout.Button(func.Invoke(null, null).ToString());
-                    GUILayout.EndHorizontal();
+                    typesState[type.Key] = opened;
                 }
-                else
+
+                //chage orgianl tab state
+                foreach (var type in typesState)
                 {
-                    if (GUILayout.Button(i.Value.ReturnType.Name + "  " + i.Key))
-                    {
-                        curFuncName = i.Key;
-                        RuntimeExplorer.showInstanceWindow = true;
-                        RuntimeExplorer.curInstance = func.Invoke(null, null);
-                        RuntimeExplorer.curInstanceName = i.Key;
-                    }
+                    if (typesState[type.Key] == false)
+                        topTabs.Remove(type.Key);
                 }
+
+                ImGui.EndTabBar();
             }
 
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
         }
 
-        public override void DrawRightView(string className, CsharpClass csharpClass)
+        void TryAddTopTab(Type type)
         {
-            if (curFuncName != string.Empty)
+            if (topTabs.ContainsKey(type) == false)
             {
-                var func = curClass.StaticPropList[curFuncName];
-
-                if (curFuncName != String.Empty)
-                    GUI.TextField(new Rect(430, 30, 190, 20), curFuncName);
-                if (func.GetParameters().Length == 0)
-                {
-                    rightScrollview.Begin();
-                    rightScrollview.Lable("返回类型: " + func.ReturnType.Name);
-                    rightScrollview.Lable("值: " + func.Invoke(null, null));
-                    rightScrollview.End();
-                }
+                topTabs.Add(type, true);
             }
         }
 
-        public override ClassInfo GetInfo() => ClassInfo.StaticProp;
+        void ShowSubViews(Type type)
+        {
+            foreach (IClassView view in subViews)
+            {
+                view.Show(type);
+            }
+        }
+
+        void DrawSubViews()
+        {
+            foreach (IClassView view in subViews)
+            {
+                view.DrawView();
+            }
+        }
     }
 
-    class StaticFieldView : IView
+    public class PropertyView : IClassView
     {
-        Rect midArea = new Rect(190, 50, 450, 700);
-        Vector2 midPos = new Vector2();
+        public bool PropertyCanRead(PropertyInfo property) => GetClassInstance() != null || GetClass().StaticPropList.ContainsKey(property.Name);
+        public override ClassInfo GetInfo() => ClassInfo.Field;
+        public IPropertyDrawer propertyDrawer = new DefaultPropertyDrawer();
 
-        public override void DrawMidView(string curclassName, CsharpClass curClass)
+        protected override void Draw()
         {
-            GUI.TextField(new Rect(210, 30, 190, 20), curclassName + "静态变量");
-
-            GUILayout.BeginArea(midArea);
-            midPos = GUILayout.BeginScrollView(midPos);
-
-            foreach (var i in curClass.StaticFieldList)
+            if (ImGui.CollapsingHeader("Property"))
             {
-                if (CsharpKeyword.GeneralTypes.Contains(i.Value.FieldType))
-                {
-                    GUILayout.BeginHorizontal();
-                    GUILayout.Button(i.Value.FieldType.Name + "  " + i.Key);
-                    GUILayout.Button(i.Value.GetValue(null).ToString());
-                    GUILayout.EndHorizontal();
-                }
-                else
-                {
-                    //Enum
-                    if(i.Value.FieldType.IsEnum == true)
-                    {
-                        GUILayout.TextField(i.Key);
-                    }
-                    else if(GUILayout.Button(i.Value.FieldType.Name + "  " + i.Key))
-                    {
-                        RuntimeExplorer.showInstanceWindow = true;
-                        RuntimeExplorer.curInstance = i.Value.GetValue(null);
-                        RuntimeExplorer.curInstanceName = i.Key;
-                    }
-                }
-
+                DrawPropertyTable(GetClass().PropList);
             }
-
-            GUILayout.EndScrollView();
-            GUILayout.EndArea();
+            if (ImGui.CollapsingHeader("Static Property"))
+            {
+                DrawInstancePropertyTable(GetClass().StaticPropList);
+            }
         }
 
-        public override void DrawRightView(string className, CsharpClass csharpClass)
+        public void DrawPropertyTable(
+            SortedList<string, PropertyInfo> property_list,
+            string table_name = "PropertyTable"
+            )
         {
+            if (property_list.Count == 0) return;
 
+            if (ImGui.BeginTable(table_name, 4, TableFlags))
+            {
+                ImGuiUtils.TableSetupHeaders(
+                    "Type", 
+                    "Name", 
+                    "Gettable", 
+                    "Settable");
+                foreach (var property in property_list)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    propertyDrawer.DrawType(property.Value.PropertyType);
+
+                    ImGuiUtils.TableTextRow(1, property.Key, property.Value.CanRead.ToString(), property.Value.CanWrite.ToString());
+                }
+                ImGui.EndTable();
+            }
         }
 
-        public override ClassInfo GetInfo() =>  ClassInfo.StaticField;
+        public void DrawInstancePropertyTable(
+            SortedList<string, PropertyInfo> property_list,
+            string table_name = "StaticPropertyTable"
+            )
+        {
+            if (property_list.Count == 0) return;
+
+            if (ImGui.BeginTable(table_name, 5, TableFlags))
+            {
+                ImGuiUtils.TableSetupHeaders(
+                    "Type", 
+                    "Name",
+                    "Value", 
+                    "Gettable", 
+                    "Settable");
+
+                foreach (var propertyPair in property_list)
+                {
+                    ImGui.TableNextRow();
+                    DrawInstanceTableRow(propertyPair);
+                }
+                ImGui.EndTable();
+            }
+        }
+
+        public void DrawInstanceTableRow(KeyValuePair<string, PropertyInfo> propertyPair)
+        {
+            ImGui.TableSetColumnIndex(0);
+            propertyDrawer.DrawType(propertyPair.Value.PropertyType);
+
+            Caller.Try(() =>
+            {
+                bool readable = PropertyCanRead(propertyPair.Value);
+                object instance = readable ? propertyPair.Value.GetValue(GetClassInstance()) : null;
+
+                ImGui.TableSetColumnIndex(1);
+                propertyDrawer.DrawName(
+                    propertyPair.Key,
+                    propertyPair.Value.PropertyType,
+                    GetClass().type,
+                    instance);
+            });
+
+            ImGui.TableSetColumnIndex(2);
+            propertyDrawer.DrawPropertyValue(propertyPair.Value, GetClassInstance());
+
+            ImGuiUtils.TableTextRow(
+                3,
+                propertyPair.Value.CanRead.ToString(),
+                propertyPair.Value.CanWrite.ToString());
+        }
+    }
+
+    class FieldView : IClassView
+    {
+        protected ValueInputWindow valueInputWindow = new ValueInputWindow();
+
+        public override ClassInfo GetInfo() => ClassInfo.Field;
+        public IFieldDrawer fieldDrawer = new DefaultFieldDrawer();
+        bool FieldCanRead(FieldInfo field) => GetClassInstance() != null || field.IsStatic;
+
+        protected override void Draw()
+        {
+            if (ImGui.CollapsingHeader("Field"))
+            {
+                DrawFieldTable(GetClass().FieldList);
+            }
+            if (ImGui.CollapsingHeader("Static Field"))
+            {
+                DrawInstanceFieldTable(GetClass().StaticFieldList);
+            }
+            valueInputWindow.OnGUI();
+        }
+
+        public void DrawFieldTable(
+            SortedList<string, FieldInfo> field_list,
+            string table_name = "FieldTable"
+        )
+        {
+            if (field_list.Count == 0) return;
+
+            if (ImGui.BeginTable(table_name, 2, TableFlags))
+            {
+                ImGuiUtils.TableSetupHeaders("Type", "Name");
+
+                foreach (var fieldPair in field_list)
+                {
+                    ImGui.TableNextRow();
+                    ImGui.TableSetColumnIndex(0);
+                    fieldDrawer.DrawType(fieldPair.Value.FieldType);
+
+                    ImGuiUtils.TableTextRow(1, fieldPair.Key);
+                }
+                ImGui.EndTable();
+            }
+        }
+
+        public void DrawInstanceFieldTable(
+            SortedList<string,FieldInfo> field_list,
+            string table_name = "InstanceFieldTable"
+            )
+        {
+            if (field_list.Count == 0) return;
+
+            if (ImGui.BeginTable(table_name, 3, TableFlags))
+            {
+                ImGuiUtils.TableSetupHeaders("Type", "Name", "Value");
+
+                foreach (var fieldPair in field_list)
+                {
+                    ImGui.TableNextRow();
+                    DrawInstanceTableRow(fieldPair);
+                }
+                ImGui.EndTable();
+            }
+        }
+
+        public void DrawInstanceTableRow(KeyValuePair<string, FieldInfo> fieldPair)
+        {
+            ImGui.TableSetColumnIndex(0);
+            fieldDrawer.DrawType(fieldPair.Value.FieldType);
+
+            ImGui.TableSetColumnIndex(1);         
+            Caller.Try(() =>
+            {
+                bool readable = FieldCanRead(fieldPair.Value);
+                object instance = readable ? fieldPair.Value.GetValue(GetClassInstance()) : null;
+
+                fieldDrawer.DrawName(
+                fieldPair.Key,
+                fieldPair.Value.FieldType,
+                GetClass().type,
+                instance);
+            });
+
+            ImGui.TableSetColumnIndex(2);
+            fieldDrawer.DrawFieldValue(fieldPair.Value, GetClassInstance());
+        }
+    }
+
+    public class MethodView : IClassView
+    {
+        public bool CanInvoke(MethodInfo method) => method.IsStatic == true || GetClassInstance() != null;
+        public override ClassInfo GetInfo() => ClassInfo.Method;
+        public IMethodDrawer methodDrawer = new DefaultMethodDrawer();
+
+        protected override void Draw( )
+        {
+            if (ImGui.CollapsingHeader("Method"))
+            {
+                DrawMethodTable(GetClass().MethodList, "ClassMethod");
+                DrawMethodTable(GetClass().GetMethodList, "ClassGetMethod");
+                DrawMethodTable(GetClass().SetMethodList, "ClassGetMethod");
+            }
+            if (ImGui.CollapsingHeader("Static Method"))
+            {
+                DrawMethodTable(GetClass().StaticMethodList, "InstanceClassMethod");
+                DrawMethodTable(GetClass().StaticGetMethodList, "InstanceGetMethod");
+                DrawMethodTable(GetClass().StaticSetMethodList, "InstanceGetMethod");
+            }
+        }
+
+        public void DrawMethodTable(
+            SortedList<string,MethodInfo> table,
+            string TableName = "ClassMethodTable"
+            )
+        {
+            if (table.Count == 0) return;
+
+            if (ImGui.BeginTable(TableName, 3, TableFlags))
+            {
+                ImGuiUtils.TableSetupHeaders("Return Type", "Name", "Param");
+
+                foreach (var method in table)
+                {
+                    ImGui.TableNextRow();
+                    DrawTableRow(method);
+                }
+                ImGui.EndTable();
+            }
+        }
+
+        public void DrawTableRow(KeyValuePair<string,MethodInfo> methodPair)
+        {
+            ImGui.TableSetColumnIndex(0);
+            methodDrawer.DrawType(methodPair.Value.ReturnType);
+
+            ImGui.TableSetColumnIndex(1);
+            methodDrawer.DrawMethodName(methodPair.Value, GetClassInstance());
+
+            ImGui.TableSetColumnIndex(2);
+            methodDrawer.DrawMethodParams(methodPair.Value, GetClassInstance());
+        }
+    }
+
+/// <summary>
+/// Instance View
+/// </summary>
+    public class InstanceMethodView:MethodView
+    {
+        protected override void Draw()
+        {
+            if (ImGui.CollapsingHeader("Method"))
+            {
+                DrawMethodTable(GetClass().MethodList);
+                DrawMethodTable(GetClass().GetMethodList);
+                DrawMethodTable(GetClass().SetMethodList);
+            }
+        }
+    }
+
+    class InstanceFieldView : FieldView
+    {
+        protected override void Draw()
+        {
+            if (ImGui.CollapsingHeader("Field"))
+            {
+                DrawInstanceFieldTable(GetClass().FieldList);
+            }
+            valueInputWindow.OnGUI();
+        }
+    }
+
+    class InstancePropView : PropertyView
+    {
+        protected override void Draw()
+        {
+            if (ImGui.CollapsingHeader("Property"))
+            {
+                DrawInstancePropertyTable(GetClass().PropList);
+            }
+        }
     }
 
 }
