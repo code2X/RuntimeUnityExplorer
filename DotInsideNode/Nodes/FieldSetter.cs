@@ -6,51 +6,51 @@ using System;
 
 namespace DotInsideNode
 {
-    [EditorNode("Get Field")]
-    class FieldNode : ComNodeBase
+    [EditorNode("Set Field")]
+    class FieldSetterNode : ComNodeBase
     {
         public SortedList<string, FieldInfo> FieldDict = new SortedList<string, FieldInfo>();
         FieldInfo m_FieldInfo = null;
 
-        TextTB m_TextTitleBar = new TextTB("Field");
+        ExecIC m_ExecIC = new ExecIC();
+        ExecOC m_ExecOC = new ExecOC();
+        TextTB m_TextTitleBar = new TextTB("Set Field");
         ComboSC m_FieldCombo = new ComboSC();
         TargetIC m_TargetIC = new TargetIC();
+        ObjectIC m_ObjectIC = new ObjectIC();
         ObjectOC m_ObjectOC = new ObjectOC();
 
-        public FieldNode()
+        public FieldSetterNode()
         {
             m_TargetIC.OnSetTargetType += new TargetIC.TypeHandler(OnTargetTypeSet);
             m_FieldCombo.OnSelected += new ComboSC.SelectAction(OnFieldSelected);
 
             AddComponet(m_TextTitleBar);
+            AddComponet(m_ExecIC);
+            AddComponet(m_ExecOC);
             AddComponet(m_FieldCombo);
             AddComponet(m_TargetIC);
             AddComponet(m_ObjectOC);
+            AddComponet(m_ObjectIC);
         }
 
         protected override void DrawContent()
         {
         }
 
-        void OnFieldSelected(string item, int index)
+        void OnFieldSelected(string item,int index)
         {
             m_FieldInfo = FieldDict[item];
             m_ObjectOC.ObjectType = FieldDict[item].FieldType;
+            m_ObjectIC.SetObjectType(FieldDict[item].FieldType);
         }
 
         void OnTargetTypeSet(Type type)
         {
-            FieldInfo[] allFileds;
-            if (m_TargetIC.Target is TypeOC)
-            {
-                allFileds = FieldTools.GetStaticField(type);
-            }
-            else
-            {
-                allFileds = FieldTools.GetAllField(type);
-            }
-            
-            //Fill field dict
+            if (type == null)
+                return;
+            //Logger.Info(type.IsClass.ToString());
+            FieldInfo[] allFileds = FieldTools.GetAllField(type);
             FieldDict.Clear();
             foreach (FieldInfo field in allFileds)
             {
@@ -63,22 +63,22 @@ namespace DotInsideNode
             {
                 m_FieldInfo = pair.Value;
                 m_ObjectOC.ObjectType = pair.Value.FieldType;
+                m_ObjectIC.SetObjectType(pair.Value.FieldType);
                 break;
             }
+            //Console.WriteLine(type.Name + "ds");
         }
 
-        public override object Request(RequestType type)
+        protected override object ExecNode(int callerID, params object[] objects)
         {
-            Assert.IsNotNull(m_FieldInfo);
-            switch (type)
+            if(m_FieldInfo == null)
             {
-                case RequestType.InstanceType:
-                    return m_FieldInfo.FieldType;
-                case RequestType.InstanceObject:
-                    return m_FieldInfo.GetValue(m_TargetIC.TargetObject);
+                Logger.Warn("FieldInfo is null");
+                return null;
             }
-
-            throw new RequestTypeError(type);
+            m_FieldInfo.SetValue(m_TargetIC.TargetObject, m_ObjectIC.Object);
+            return null;
         }
+
     }
 }

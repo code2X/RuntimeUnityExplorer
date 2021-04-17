@@ -17,8 +17,8 @@ namespace DotInsideLib
             Caller.Try(() =>
             {
                 DotInsideNode.DotPrint.GetInstance().OnGUI();
-                //explorerView.OnGUI();
-                //instanceView.OnGUI();
+                explorerView.OnGUI();
+                instanceView.OnGUI();
                 ImGui.ShowDemoWindow();
                 //ArrayInfoWindow.GetInstance().OnGUI();
                 //ArrayElementInputWindow.GetInstance().OnGUI();
@@ -54,7 +54,9 @@ namespace DotInsideLib
             {
                 Assembler assembly = new Assembler(path);
                 SortedDictionary<string, Type> className2Type = assembly.GetTypeDict();
-            
+                className2Type.Clear();
+                className2Type = DotInsideNode.ClassTest.classList;
+
                 explorerView = AssemblyExplorerView.GetInstance();
                 explorerView.AutoCluster(className2Type);
             

@@ -1,33 +1,51 @@
 ﻿using imnodesNET;
+using ImGuiNET;
 
 namespace DotInsideNode
 {
-    abstract class INodeComponent
+    public abstract class INodeComponent
     {
         int m_ID;
-        INodeView m_Parent = null;
+        INode m_Parent = new NullNode();
 
-        public virtual void SetID(int id) => m_ID = id;
-        public virtual int GetID() => m_ID;
-        public virtual void SetParent(INodeView node) => m_Parent = node;
-        public virtual INodeView GetParent() => m_Parent;
-        public abstract ComponentType GetComponentType();
+        public int ID
+        {
+            get => m_ID;
+            set => m_ID = value;
+        }
+        public INode ParentNode
+        {
+            get => m_Parent;
+            set => m_Parent = value;
+        }
+        public abstract ComponentType ComponentType
+        {
+            get;
+        }
 
+        //Logic
         public abstract void DrawComponent();
         public virtual void DoComponentEnd() { }
+
+        //Event
+        public virtual void OnComponentDestroyed() { }
     }
 
-    enum ComponentType
+    public enum ComponentType
     {
+        Null,
         TitleBar,
         Input,
         Output,
         Static,
     }
 
-    abstract class INodeTitleBar : INodeComponent
+    public abstract class INodeTitleBar : INodeComponent
     {
-        public override ComponentType GetComponentType() => ComponentType.TitleBar;
+        public override ComponentType ComponentType 
+        { 
+            get => ComponentType.TitleBar;
+        } 
         public override void DrawComponent()
         {
             imnodes.BeginNodeTitleBar();
@@ -38,12 +56,15 @@ namespace DotInsideNode
         protected abstract void DrawContent();
     }
 
-    abstract class INodeStatic : INodeComponent
+    public abstract class INodeStatic : INodeComponent
     {
-        public override ComponentType GetComponentType() => ComponentType.Static;
+        public override ComponentType ComponentType
+        {
+            get => ComponentType.Static;
+        }
         public override void DrawComponent()
         {
-            imnodes.BeginStaticAttribute(GetID());
+            imnodes.BeginStaticAttribute(this.ID);
             DrawContent();
             imnodes.EndStaticAttribute();
         }
@@ -51,33 +72,118 @@ namespace DotInsideNode
         protected abstract void DrawContent();
     }
 
-    abstract class INodeOutput : INodeComponent
+    public interface ILinkEvent
     {
-        public override ComponentType GetComponentType() => ComponentType.Output;
+        void OnLinkDropped();
+        void OnLinkDestroyed();
+        void OnLinkHovered();
+        void OnLinkStart();
+    }
+
+    public enum RequestType
+    {
+        InstanceObject,
+        InstanceType
+    }
+
+    public enum MessageType
+    {
+        InstanceObjectChange,
+        InstanceTypeChange
+    }
+
+    public abstract class INodeEventComponent : INodeComponent, ILinkEvent
+    {
+        protected class RequestTypeError : System.Exception
+        {
+            public RequestTypeError(RequestType type,INodeComponent connect = null)
+                :
+                base("Error Request Type: " + type +", Connect:" + connect)
+            { }
+        }
+
+        protected class MessageTypeError : System.Exception
+        {
+            public MessageTypeError(MessageType type, INodeComponent connect = null)
+                :
+                base("Error Message Type: " + type + ", Connect:" + connect)
+            { }
+        }
+
+        public virtual object Request(RequestType type) => throw new System.NotImplementedException();
+        public virtual object SendMessage(params string[] msgs) => throw new System.NotImplementedException();
+        public virtual object SendMessage(MessageType type) => throw new System.NotImplementedException();
+
+        //Event
+        public virtual void OnLinkDropped() { }
+        public virtual void OnLinkDestroyed() { }
+        public virtual void OnLinkHovered() { }
+        public virtual void OnLinkStart() { }
+    }
+
+    public abstract class INodeOutput : INodeEventComponent
+    {
+        LinkManager m_LinkManager = LinkManager.Instance;
+
+        public override ComponentType ComponentType
+        {
+            get => ComponentType.Output;
+        }
         public override void DrawComponent()
         {
-            imnodes.BeginOutputAttribute(GetID(), GetPinShape());
+            imnodes.BeginOutputAttribute(this.ID, GetPinShape());
             DrawContent();
             imnodes.EndOutputAttribute();
         }
 
-        public virtual bool ConnectTo(INodeInput component) { return false; }      
         protected abstract void DrawContent();
         protected virtual PinShape GetPinShape() => PinShape.Circle;
+
+        public virtual bool TryConnectTo(INodeInput component) { return false; }
+        public override void OnComponentDestroyed()
+        {
+            m_LinkManager.TryRemoveLinkByStart(this.ID);
+        }
+
+        public virtual object Play(params object[] objects) => null;
+        public virtual object Compile(params object[] objects) => null;
     }
 
-    abstract class INodeInput : INodeComponent
+    public abstract class INodeInput : INodeEventComponent
     {
-        public override ComponentType GetComponentType() => ComponentType.Input;
+        LinkManager m_LinkManager = LinkManager.Instance;
+
+        public override ComponentType ComponentType
+        {
+            get => ComponentType.Input;
+        }
         public override void DrawComponent()
         {
-            imnodes.BeginInputAttribute(GetID(), GetPinShape());
+            imnodes.BeginInputAttribute(this.ID, GetPinShape());
             DrawContent();
             imnodes.EndInputAttribute();
         }
 
-        public virtual bool ConnectBy(INodeOutput component) { return false; }
         protected abstract void DrawContent();
         protected virtual PinShape GetPinShape() => PinShape.Circle;
+
+        public virtual bool TryConnectBy(INodeOutput component) { return false; }
+        public override void OnComponentDestroyed()
+        {
+            m_LinkManager.TryRemoveLinkByEnd(this.ID);
+        }
+
+        public virtual object Play(params object[] objects) => null;
+        public virtual object Compile(params object[] objects) => null;
+    }
+
+    public class NullOC : INodeOutput
+    {
+        protected override void DrawContent() { }
+    }
+
+    public class NullIC : INodeInput
+    {
+        protected override void DrawContent() { }
     }
 }
