@@ -17,9 +17,9 @@ namespace DotInsideNode
 
     class LinkPool
     {
-        static Dictionary<int, LinkPair> s_Links = new Dictionary<int, LinkPair>();
-        static Dictionary<int, List<int>> s_Start2Link = new Dictionary<int, List<int>>();
-        static Dictionary<int, List<int>> s_End2Link = new Dictionary<int, List<int>>();
+        Dictionary<int, LinkPair> s_Links = new Dictionary<int, LinkPair>();
+        Dictionary<int, List<int>> s_Start2Link = new Dictionary<int, List<int>>();
+        Dictionary<int, List<int>> s_End2Link = new Dictionary<int, List<int>>();
 
         static Random s_Rand = new Random();
 
@@ -118,6 +118,8 @@ namespace DotInsideNode
         {
             return s_Links.TryGetValue(id, out link);
         }
+
+
     }
 
 }

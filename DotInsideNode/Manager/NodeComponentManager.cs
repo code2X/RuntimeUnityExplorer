@@ -7,8 +7,6 @@ namespace DotInsideNode
 
     class NodeComponentAttributeProcesser
     {
-        LinkManager m_LinkManager = LinkManager.Instance;
-
         void ProcessInComConnect(INodeInput com)
         {
             object[] attrs = com.GetType().GetCustomAttributes(true);
@@ -16,7 +14,7 @@ namespace DotInsideNode
             {
                 if (attrs[i].GetType() == typeof(SingleConnect))
                 {
-                    m_LinkManager.TryRemoveLinkByEnd(com.ID);
+                    LinkManager.Instance.TryRemoveLinkByEnd(com.ID);
                 }
             }
         }
@@ -26,7 +24,7 @@ namespace DotInsideNode
             SingleConnect singleConnect = (SingleConnect)Attribute.GetCustomAttribute(inCom.GetType(), typeof(SingleConnect));
             if (singleConnect != null)
             {
-                m_LinkManager.TryRemoveLinkByEnd(inCom.ID);
+                LinkManager.Instance.TryRemoveLinkByEnd(inCom.ID);
             }
         }
         void ProcessSingleConncect(INodeOutput outCom)
@@ -34,7 +32,7 @@ namespace DotInsideNode
             SingleConnect singleConnect = (SingleConnect)Attribute.GetCustomAttribute(outCom.GetType(), typeof(SingleConnect));
             if (singleConnect != null)
             {
-                m_LinkManager.TryRemoveLinkByStart(outCom.ID);
+                LinkManager.Instance.TryRemoveLinkByStart(outCom.ID);
             }
         }
 
@@ -74,7 +72,7 @@ namespace DotInsideNode
     }
 
     [Serializable]
-    class NodeComponentManager: ILinkEventObserver
+    class NodeComponentManager:Singleton<NodeComponentManager>,ILinkEventObserver
     {
         Random s_Random = new Random();
 
@@ -82,20 +80,15 @@ namespace DotInsideNode
         Dictionary<int, INodeInput> g_InComponents = new Dictionary<int, INodeInput>();
         Dictionary<int, INodeOutput> g_OutComponents = new Dictionary<int, INodeOutput>();
 
-        LinkManager m_LinkManager = LinkManager.Instance;
         NodeComponentAttributeProcesser m_ComAttrProcesser = new NodeComponentAttributeProcesser();
 
-        NodeComponentManager() 
+        public NodeComponentManager() 
         {
-            m_LinkManager.AttachEventObserver(this);
+            LinkManager.Instance.AttachEventObserver(this);
         }
-        static NodeComponentManager __instance = new NodeComponentManager();
-        public static NodeComponentManager Instance 
+        public NodeComponentManager(LinkManager linkManager)
         {
-            get
-            {
-                return __instance;
-            }
+            linkManager.AttachEventObserver(this);
         }
 
         bool TryConnectComponet(int start, int end)
@@ -114,71 +107,71 @@ namespace DotInsideNode
             return false;
         }
 
-        public override void NotifyLinkCreated(int start,int end)
+        public virtual void NotifyLinkCreated(int start,int end)
         {
             if (TryConnectComponet(start, end))
             {
-                m_LinkManager.AddLink(new LinkPair(start, end));
+                LinkManager.Instance.AddLink(new LinkPair(start, end));
             }
         }
 
-        public override void NotifyLinkStarted(int start)
+        public virtual void NotifyLinkStarted(int start)
         {
             INodeInput inCom;
             INodeOutput outCom;
 
             if ( g_InComponents.TryGetValue(start, out inCom) )
             {
-                inCom.OnLinkStart();
+                inCom.LinkEventProc(ELinkEvent.Started);
             }
             if( g_OutComponents.TryGetValue(start, out outCom) )
             {
-                outCom.OnLinkStart();
+                outCom.LinkEventProc(ELinkEvent.Started);
             }
         }
 
-        public override void NotifyLinkDropped(int start)
+        public virtual void NotifyLinkDropped(int start)
         {
             INodeInput inCom;
             INodeOutput outCom;
 
             if (g_InComponents.TryGetValue(start, out inCom))
             {
-                inCom.OnLinkDropped();
+                inCom.LinkEventProc(ELinkEvent.Dropped);
             }
             if (g_OutComponents.TryGetValue(start, out outCom))
             {
-                outCom.OnLinkDropped();
+                outCom.LinkEventProc(ELinkEvent.Dropped);
             }
         }
 
-        public override void NotifyLinkDestroyed(int start)
+        public virtual void NotifyLinkDestroyed(int start)
         {
             INodeInput inCom;
             INodeOutput outCom;
 
             if (g_InComponents.TryGetValue(start, out inCom))
             {
-                inCom.OnLinkDestroyed();
+                inCom.LinkEventProc(ELinkEvent.Destroyed);
             }
             if (g_OutComponents.TryGetValue(start, out outCom))
             {
-                outCom.OnLinkDestroyed();
+                outCom.LinkEventProc(ELinkEvent.Destroyed);
             }
         }
 
-        public override void NotifyLinkHovered(int start)
+        public virtual void NotifyLinkHovered(int start)
         {
             INodeInput inCom;
             INodeOutput outCom;
 
             if (g_InComponents.TryGetValue(start, out inCom))
             {
-                inCom.OnLinkHovered();
+                inCom.LinkEventProc(ELinkEvent.Hovered);
             }
             if (g_OutComponents.TryGetValue(start, out outCom))
             {
-                outCom.OnLinkHovered();
+                outCom.LinkEventProc(ELinkEvent.Hovered);
             }
         }
 
@@ -222,7 +215,7 @@ namespace DotInsideNode
             g_InComponents.Remove(comID);
             g_OutComponents.Remove(comID);
 
-            component.OnComponentDestroyed();
+            component.NodeComEventProc(INodeComponent.EEvent.Detroyed);
         }
     }
 }

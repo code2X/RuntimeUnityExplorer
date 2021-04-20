@@ -19,7 +19,7 @@ namespace DotInsideNode
         string m_PopupID = "PopupVarGetSet";
         SelectAction m_Handler;
 
-        IVarBase m_Var = null;
+        IVar m_Var = null;
         public string GetPopupID() => m_PopupID;
 
         public enum MenuType
@@ -28,7 +28,7 @@ namespace DotInsideNode
             Set
         }
 
-        public delegate void SelectAction(IVarBase variable, MenuType select_type);
+        public delegate void SelectAction(IVar variable, MenuType select_type);
 
         public void Show(int var_id, SelectAction select_handler = null)
         {
@@ -58,7 +58,7 @@ namespace DotInsideNode
         {
             if (m_Handler == null || m_Var == null)
                 return;
-            string varName = m_Var.VarName;
+            string varName = m_Var.Name;
 
             ImGui.Text(varName);
             if(ImGui.Selectable("Get " + varName))

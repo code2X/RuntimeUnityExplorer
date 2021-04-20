@@ -1,193 +1,100 @@
-﻿using System;
+﻿using ImGuiNET;
+using System;
 using System.Collections.Generic;
 
 namespace DotInsideNode
 {
     [Serializable]
-    public class VarManager
+    public class VarManager: Singleton<VarManager>
     {
-        public static List<IVarBase> VarClassList = new List<IVarBase>();
-
-        Dictionary<string, IVarBase> m_Name2Vars = new Dictionary<string, IVarBase>();
-        Dictionary<int, IVarBase> m_ID2Vars = new Dictionary<int, IVarBase>();
-
-        IVarBase m_SelectedVar = null;
-        string m_NewVarBaseName = "NewVar_";
-        VarListDrawer m_ListDrawer = null;
-
-        void InitBluePrintVarClasses(List<IVarBase> class_list)
+        class ListMenuView : TEnumMenuView<IVar, ListMenuView.EItemEvent>
         {
-            if (class_list.Count != 0)
-                return;
-            var attrList = AttributeTools.GetNamespaceCustomAttributes(typeof(DotPrintVar));
-            foreach (var pair in attrList)
+            public enum EItemEvent
             {
-                System.Type type = pair.Key;
-
-                IVarBase @var = (IVarBase)ClassTools.CallDefaultConstructor(type);
-                class_list.Add(@var);
-                Logger.Info("BP Variable: " + type);
+                Delete,
+                Duplicate,
             }
         }
 
-        VarManager()
+        TManager<IVar> m_Manager = new TManager<IVar>();
+        VarListView m_ListDrawer = null;
+        ListMenuView m_ListMenuView = new ListMenuView();
+
+        public VarManager()
         {
-            m_ListDrawer = new VarListDrawer(ref m_Name2Vars);
-            m_ListDrawer.OnDelete += new VarListDrawer.VarAction(OnDelete);
-            m_ListDrawer.OnSelect += new VarListDrawer.VarAction(OnSelect);
-            m_ListDrawer.OnDuplicate += new VarListDrawer.VarAction(OnDuplicate);
-            InitBluePrintVarClasses(VarClassList);
+            m_Manager.NewObjectBaseName = "NewVar_";
+
+            var name2obj = m_Manager.Name2Object;
+            m_ListDrawer = new VarListView(ref name2obj);
+
+            InitManagerEvent();
+            diType.InitClassList();
+            diContainer.InitClassList();
         }
 
-        void OnSelect(IVarBase variable)
+        void InitManagerEvent()
         {
-            m_SelectedVar = variable;
+            //List Menu Event
+            m_ListMenuView.OnMenuEvent += new ListMenuView.TMenuAction(ListMenuItemEventProc);
+            m_ListDrawer.MenuDrawer = m_ListMenuView;
+
+            //List Event
+            m_ListDrawer.OnListItemEvent += new VarListView.TListAction(ListItemEventProc);
+
+            m_Manager.OnObjectEvent += new TManager<IVar>.ObjectAction(ManagerEventProc);
         }
 
-        void OnDelete(IVarBase variable)
+        //List Event
+        void ListItemEventProc(VarListView.EListItemEvent eEvent, IVar variable)
         {
-            TryDeleteVar(variable.VarName);
-        }
-
-        void OnDuplicate(IVarBase variable)
-        {
-            IVarBase dup = variable.Duplicate();
-            AddVar(dup);
-        }
-
-        static VarManager __instance = new VarManager();
-        public static VarManager Instance
-        {
-            get => __instance;
-        }
-
-        string GetNewVarName()
-        {
-            int index = 0;
-            string varName = m_NewVarBaseName + index;
-            while (m_Name2Vars.ContainsKey(varName))
+            switch (eEvent)
             {
-                ++index;
-                varName = m_NewVarBaseName + index;
+                case VarListView.EListItemEvent.SelectItem:
+                    m_Manager.m_SelectedTObj = variable;
+                    PrintRightView.Instance.Submit(DrawVarInfo);
+                    break;
             }
-
-            return varName;
         }
-
-        int GetNewVarID()
+        void ListMenuItemEventProc(ListMenuView.EMenuEvent eMenuEvent, ListMenuView.EItemEvent eItemEvent, IVar variable)
         {
-            int index = 0;
-            while (m_ID2Vars.ContainsKey(index))
+            switch (eItemEvent)
             {
-                ++index;
+                case ListMenuView.EItemEvent.Delete:
+                    TryDeleteVar(variable.Name);
+                    break;
+                case ListMenuView.EItemEvent.Duplicate:
+                    IVar dup = (IVar)variable.Duplicate();
+                    AddVar(dup);
+                    break;
             }
-
-            return index;
         }
 
-        public void AddVar(IVarBase variable)
+        //Var Event
+        void ManagerEventProc(TManager<IVar>.EObjectEvent eObjectEvent, IVar @var)
         {
-            string name = GetNewVarName();
-            int id = GetNewVarID();
-            variable.VarName = name;
-            variable.VarID = id;
-
-            m_Name2Vars.Add(name, variable);
-            m_ID2Vars.Add(id, variable);
-        }
-
-        public bool ContainVar(int id)
-        {
-            return GetVarByID(id) != null ? true : false;
-        }
-
-        public bool ContainVar(string name) 
-        {
-            return GetVarByName(name) != null ? true : false;
-        }
-
-        public bool SelectVar(int id)
-        {
-            IVarBase variable;
-            if ((variable = GetVarByID(id)) != null)
+            switch (eObjectEvent)
             {
-                m_SelectedVar = variable;
-                return true;
+                case TManager<IVar>.EObjectEvent.Delete:
+                    @var.OnVarDelete();     //Notify var delete action
+                    break;
             }
-            return false;
         }
 
-        public IVarBase GetVarByID(int id)
-        {
-            IVarBase variable;
-            return m_ID2Vars.TryGetValue(id, out variable) ? variable: null;  
-        }
+        public void AddVar() { AddVar(new Variable()); }
+        public void AddVar(IVar variable) => m_Manager.AddObject(variable);
+        public bool ContainVar(int id) => m_Manager.ContainObject(id);
+        public bool ContainVar(string name) => m_Manager.ContainObject(name);
+        public bool SelectVar(int id) => m_Manager.SelectObject(id);
+        public IVar GetVarByID(int id) => m_Manager.GetObjectByID(id);
+        public IVar GetVarByName(string name) => m_Manager.GetObjectByName(name);
+        public bool TryDeleteVar(string var_name) => m_Manager.TryDeleteObject(var_name);
+        public bool TryDeleteVar(int var_id) => m_Manager.TryDeleteObject(var_id);
+        public bool TryReplaceVar(IVar old_var, IVar new_var) => m_Manager.TryReplaceObject(old_var, new_var);
+        public bool TryRenameVar(int obj_id, string new_name) => m_Manager.TryRenameObject(obj_id,new_name);
 
-        public IVarBase GetVarByName(string name)
-        {
-            IVarBase variable;
-            return m_Name2Vars.TryGetValue(name, out variable) ? variable : null;
-        }
-        
-        public void DrawVarList()
-        {
-            m_ListDrawer.DrawList();
-        }
+        public void DrawVarList() => m_ListDrawer.DrawList();
+        void DrawVarInfo() => m_Manager.m_SelectedTObj?.DrawEditor();
 
-        public void DrawVarInfo()
-        {
-            if( m_SelectedVar != null)
-                m_SelectedVar.DrawEditor();
-        }
-
-        public bool TryDeleteVar(string var_name)
-        {
-            if (var_name == string.Empty)
-                return false;
-
-            IVarBase @var;
-            return m_Name2Vars.TryGetValue(var_name, out @var) ? TryDeleteVar(@var) : false;
-        }
-
-        public bool TryDeleteVar(int var_id)
-        {
-            if (var_id == 0)
-                return false;
-
-            IVarBase @var;
-            return m_ID2Vars.TryGetValue(var_id, out @var) ? TryDeleteVar(@var) : false;
-        }
-
-        bool TryDeleteVar(IVarBase @var)
-        {
-            @var.OnVarDelete();     //Notify var delete action
-            if (m_ID2Vars.Remove(@var.VarID) == false)
-            {
-                Logger.Warn("Try delete var not in id dict");
-                return false;
-            }
-            if (m_Name2Vars.Remove(@var.VarName) == false)
-            {
-                Logger.Warn("Try delete var not in name dict");
-                return false;
-            }
-            return true;
-        }
-
-        public bool TryReplaceVar(IVarBase old_var, IVarBase new_var)
-        {
-            IVarBase var1,var2;
-            if (m_Name2Vars.TryGetValue(old_var.VarName, out var1) == false || 
-                m_ID2Vars.TryGetValue(old_var.VarID,out var2) == false)
-                return false;
-
-            if (var1.VarID != var2.VarID || var1.VarName != var2.VarName)
-                return false;
-
-            m_ID2Vars[old_var.VarID] = new_var;
-            m_Name2Vars[old_var.VarName] = new_var;          
-            return true;
-        }
     }
 
 }

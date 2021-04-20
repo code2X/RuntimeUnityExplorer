@@ -4,29 +4,26 @@ using System.Collections.Generic;
 
 namespace DotInsideNode
 {
-    abstract class ILinkEventObserver
+    interface ILinkEventObserver
     {
-        public virtual void NotifyLinkCreated(int start,int end) { }
-        public virtual void NotifyLinkStarted(int start) { }
-        public virtual void NotifyLinkDropped(int start) { }
-        public virtual void NotifyLinkDestroyed(int start) { }
-        public virtual void NotifyLinkHovered(int start) { }
+        void NotifyLinkCreated(int start, int end);
+        void NotifyLinkStarted(int start);
+        void NotifyLinkDropped(int start);
+        void NotifyLinkDestroyed(int start);
+        void NotifyLinkHovered(int start);
     }
 
     [Serializable]
-    class LinkManager
+    class LinkManager: Singleton<LinkManager>
     {
         LinkPool m_LinkPool = new LinkPool();
         List<ILinkEventObserver> m_EventObservers = new List<ILinkEventObserver>();
 
-        LinkManager() { }
         static LinkManager __instance = new LinkManager();
         public static LinkManager Instance
         {
-            get
-            {
-                return __instance;
-            }
+            get => __instance;
+            set => __instance = value;
         }
 
         public void Draw()
@@ -48,6 +45,9 @@ namespace DotInsideNode
             m_EventObservers.Add(observer);
         }
 
+/// <summary>
+/// ------------ Event Notify
+/// </summary>
         void NotifyLinkCreatedEvent(int start_attr, int end_attr)
         {
             foreach (var observer in m_EventObservers)
@@ -88,6 +88,9 @@ namespace DotInsideNode
             }
         }
 
+/// <summary>
+/// ------------ Event Check
+/// </summary>
         void CheckLinkCreated()
         {
             int start_attr = -1, end_attr = -1;
@@ -133,6 +136,9 @@ namespace DotInsideNode
             }
         }
 
+/// <summary>
+/// ------------ Link Manager
+/// </summary>
         public void AddLink(LinkPair linkPair)
         {
             m_LinkPool.AddLink(linkPair);
