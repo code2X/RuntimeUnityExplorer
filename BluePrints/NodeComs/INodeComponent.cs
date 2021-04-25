@@ -1,0 +1,100 @@
+﻿using imnodesNET;
+using System;
+
+namespace DotInsideNode
+{
+    [Serializable]
+    public enum ENodeComponent
+    {
+        Null,
+        TitleBar,
+        Input,
+        Output,
+        Static,
+    }
+
+    /// <summary>
+    /// Node Component Abstract Interface
+    /// </summary>
+    [Serializable]
+    public abstract class INodeComponent : dnObject
+    {
+        INode m_Parent = new NullNode();
+        INodeGraph m_pNodeGraph = null;
+
+        public INodeGraph NodeGraph
+        {
+            get
+            {
+                Assert.IsNotNull(m_pNodeGraph);
+                return m_pNodeGraph;
+            }
+            set => m_pNodeGraph = value;
+        }
+        public INode ParentNode
+        {
+            get => m_Parent;
+            set => m_Parent = value;
+        }
+        public abstract ENodeComponent ComponentType
+        {
+            get;
+        }
+
+        //Control flow
+        public abstract void DrawComponent();
+        public virtual void DoComponentEnd() { }
+
+        //Event
+        public enum EEvent
+        {
+            Clicked,
+            Selected,
+            Hovered,
+            Detroyed
+        }
+        public virtual void NodeComEventProc(EEvent eEvent) { InfoComEvent(eEvent); }
+
+        protected void InfoComEvent(EEvent eEvent)
+        {
+            Logger.Info(ParentNode.GetType().Name + " " + GetType().Name + " Com " + eEvent.ToString());
+        }
+    }
+
+    /// <summary>
+    /// Title Component: Show node title and node tooltip
+    /// </summary>
+    [Serializable]
+    public abstract class INodeTitleBar : INodeComponent
+    {
+        public override ENodeComponent ComponentType => ENodeComponent.TitleBar;
+
+        //Control flow
+        public override void DrawComponent()
+        {
+            imnodes.BeginNodeTitleBar();
+            DrawContent();
+            imnodes.EndNodeTitleBar();
+        }       
+        protected virtual void DrawContent() { }
+    }
+
+    /// <summary>
+    /// Static Component: Without inpubt and output pin 
+    /// </summary>
+    [Serializable]
+    public abstract class INodeStatic : INodeComponent
+    {
+        public override ENodeComponent ComponentType => ENodeComponent.Static;
+
+        //Control flow
+        public override void DrawComponent()
+        {
+            imnodes.BeginStaticAttribute(this.ID);
+            DrawContent();
+            imnodes.EndStaticAttribute();
+        }
+        protected virtual void DrawContent() { }
+    }
+
+}

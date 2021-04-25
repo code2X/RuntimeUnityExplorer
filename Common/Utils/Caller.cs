@@ -3,6 +3,9 @@ using System.Threading;
 
 public class Caller
 {
+    /// <summary>
+    /// Error return false
+    /// </summary>
     public static bool Try(Action func)
     {
         try

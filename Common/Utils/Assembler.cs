@@ -49,6 +49,7 @@ public class Assembler
 
     public static Type[] GetNamespaceTypes()
     {
+        Assembly.GetExecutingAssembly();
         return Assembly.GetExecutingAssembly().GetTypes();
     }
 
